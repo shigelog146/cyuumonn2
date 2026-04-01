@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+  <meta charset="UTF-8">
+  <title>セッション発行</title>
+
+  <!-- QR生成ライブラリ -->
+  <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 20px;
+    }
+
+    button {
+      padding: 10px 20px;
+      font-size: 18px;
+    }
+
+    #qr {
+      margin-top: 20px;
+    }
+  </style>
+</head>
+
+<body>
+
+  <h2>セッション発行（開発用）</h2>
+
+  <!-- テーブル選択 -->
+  <select id="table">
+    <option value="1">テーブル1</option>
+    <option value="2">テーブル2</option>
+    <option value="3">テーブル3</option>
+    <option value="4">テーブル4</option>
+    <option value="5">テーブル5</option>
+    <option value="6">カウンター1</option>
+    <option value="7">カウンター2</option>
+    <option value="8">カウンター3</option>
+    <option value="9">カウンター4</option>
+    <option value="10">カウンター5</option>
+  </select>
+
+  <button onclick="createSession()">発行</button>
+
+  <hr>
+
+  <!-- 結果表示 -->
+  <p id="url"></p>
+  <div id="qr"></div>
+
+  <script>
+
+    // ===============================
+    // Supabase設定（あなたの値）
+    // ===============================
+    const SUPABASE_URL = "https://flefnottwzsbihgrqrqk.supabase.co";
+    const SUPABASE_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZsZWZub3R0d3pzYmloZ3JxcnFrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxOTgxNzMsImV4cCI6MjA4OTc3NDE3M30.gvqf7_VRMZiPcGmQsWk_DCEJ0JmD_wcCCVzl-L9URKc";
+
+    // ===============================
+    // セッション発行
+    // ===============================
+    async function createSession() {
+
+      const tableNumber = document.getElementById("table").value;
+
+      try {
+
+        // ① セッション作成
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/sessions`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "apikey": SUPABASE_API_KEY,
+            "Authorization": `Bearer ${SUPABASE_API_KEY}`,
+            "Prefer": "return=representation"
+          },
+          body: JSON.stringify({
+            table_number: tableNumber
+          })
+        });
+
+        const data = await res.json();
+
+        if (!data[0]) {
+          alert("セッション作成失敗");
+          console.error(data);
+          return;
+        }
+
+        const sessionId = data[0].id;
+
+        // ===============================
+        // ② URL生成（ここ重要）
+        // ===============================
+        const baseUrl = location.origin + "/index.html";
+
+        const orderUrl =
+          `${baseUrl}?table=${tableNumber}&session=${sessionId}`;
+
+        // 表示
+        document.getElementById("url").textContent = orderUrl;
+
+        // ===============================
+        // ③ QR生成
+        // ===============================
+        document.getElementById("qr").innerHTML = "";
+
+        QRCode.toCanvas(orderUrl, function (err, canvas) {
+          if (err) {
+            console.error(err);
+            return;
+          }
+          document.getElementById("qr").appendChild(canvas);
+        });
+
+      } catch (e) {
+        alert("通信エラー");
+        console.error(e);
+      }
+    }
+
+  </script>
+
+</body>
+
+</html>
