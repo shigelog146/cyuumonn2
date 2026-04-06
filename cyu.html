@@ -177,16 +177,27 @@
       const tableMap = {};
 
       orders.forEach(o => {
-        if (!tableMap[o.table_number]) {
-          tableMap[o.table_number] = [];
+
+        // ▼キーを変更（ここが最重要）
+        const key = `${o.seat_type || "table"}_${o.table_number}`;
+
+        if (!tableMap[key]) {
+          tableMap[key] = [];
         }
-        tableMap[o.table_number].push(o);
+
+        tableMap[key].push(o);
       });
 
       // ===============================
       // テーブルごとに表示
       // ===============================
-      for (const table in tableMap) {
+      for (const key in tableMap) {
+
+        const [seatType, table] = key.split("_");
+
+        const label = seatType === "counter"
+          ? "カウンター"
+          : "テーブル";
 
         const tableDiv = document.createElement("div");
         tableDiv.className = "table-group";
@@ -194,84 +205,88 @@
         let total = 0;
         let content = "";
 
-        tableMap[table].forEach(o => {
+        // ===============================
+        // 並び替え（←ここに移動）
+        // ===============================
+        tableMap[key].sort((a, b) => {
 
-          // ★追加（forEachの前）
-          tableMap[table].sort((a, b) => {
+          // 取消は一番下
+          if (a.is_cancelled !== b.is_cancelled) {
+            return a.is_cancelled ? 1 : -1;
+          }
 
-            // 取消は一番下
-            if (a.is_cancelled !== b.is_cancelled) {
-              return a.is_cancelled ? 1 : -1;
-            }
+          // 未調理を上
+          if (a.is_done !== b.is_done) {
+            return a.is_done ? 1 : -1;
+          }
 
-            // 未調理を上
-            if (a.is_done !== b.is_done) {
-              return a.is_done ? 1 : -1;
-            }
+          // 新しい順
+          return new Date(b.created_at) - new Date(a.created_at);
+        });
 
-            // 新しい順（任意）
-            return new Date(b.created_at) - new Date(a.created_at);
-          });
+        // ===============================
+        // 表示処理
+        // ===============================
+        tableMap[key].forEach(o => {
 
-          content += `<div class="order-block ${o.is_cancelled ? 'cancelled' : (o.is_done ? 'done' : '')
-            }">`;
+          content += `<div class="order-block ${o.is_cancelled ? 'cancelled' : (o.is_done ? 'done' : '')}">`;
 
-          // 状態表示（←ここに入れる）
+          // 状態表示
           if (o.is_cancelled) {
             content += `<div style="color:red;">【取消済】</div>`;
           } else if (o.is_done) {
             content += `<div style="color:lime;">【調理済】</div>`;
           }
 
-          // ===== メニュー =====
+          // メニュー
           if (o.order_items) {
             o.order_items.forEach(i => {
               const price = i.price * i.quantity;
-              // ★ここが重要
+
               if (!o.is_cancelled) {
                 total += price;
               }
 
               content += `
-      <div>
-        ${i.item_name} ×${i.quantity}（¥${price}）
-      </div>
+        <div>
+          ${i.item_name} ×${i.quantity}（¥${price}）
+        </div>
       `;
             });
           }
 
-          // ===== メモ =====
+          // メモ
           if (o.message) {
             content += `<div>📝 ${o.message}</div>`;
           }
 
-          // ===== ボタン復活 =====
+          // ボタン
           content += `
-            <div style="margin-top:5px;">
-              <button class="doneBtn" onclick="toggleDone(${o.id}, ${o.is_done})">
-                ${o.is_done ? "未完了に戻す" : "調理完了"}
-              </button>
+    <div style="margin-top:5px;">
+      <button class="doneBtn" onclick="toggleDone(${o.id}, ${o.is_done})">
+        ${o.is_done ? "未完了に戻す" : "調理完了"}
+      </button>
 
-              <button class="cancelBtn" onclick="toggleCancel(${o.id}, ${o.is_cancelled})">
-                ${o.is_cancelled ? "取消解除" : "注文取消"}
-              </button>
-            </div>
-          `;
+      <button class="cancelBtn" onclick="toggleCancel(${o.id}, ${o.is_cancelled})">
+        ${o.is_cancelled ? "取消解除" : "注文取消"}
+      </button>
+    </div>
+  `;
 
           content += `</div>`;
         });
 
         tableDiv.innerHTML = `
-      <h2>テーブル ${table}</h2>
+      <h2>${label} ${table}</h2>
       ${content}
       <div style="margin-top:10px; font-weight:bold;">
         合計：¥${total}
       </div>
 
-      <button onclick="checkoutTable(${table})"
-        style="margin-top:10px; padding:10px;">
-        💰 このテーブルを会計
-      </button>
+<button onclick="checkoutTable('${seatType}', ${table})"
+  style="margin-top:10px; padding:10px;">
+  💰 この${label}を会計
+</button>
       `;
         container.appendChild(tableDiv);
       }
@@ -280,12 +295,12 @@
     // ===============================
     // テーブル単位会計
     // ===============================
-    async function checkoutTable(tableNumber) {
+    async function checkoutTable(seatType, tableNumber) {
 
       try {
 
         const res = await fetch(
-          `${SUPABASE_URL}/rest/v1/orders?table_number=eq.${tableNumber}&is_hidden=eq.false&select=*,order_items(*)`,
+          `${SUPABASE_URL}/rest/v1/orders?table_number=eq.${tableNumber}&seat_type=eq.${seatType}&is_hidden=eq.false&select=*,order_items(*)`,
           {
             headers: {
               "apikey": API_KEY,
@@ -301,7 +316,9 @@
           return;
         }
 
-        let text = `【テーブル ${tableNumber} 会計】\n\n`;
+        const label = seatType === "counter" ? "カウンター" : "テーブル";
+
+        let text = `【${label} ${tableNumber} 会計】\n\n`;
         let total = 0;
 
         orders.forEach(o => {
@@ -338,7 +355,7 @@
         if (!confirm(text + "\n会計しますか？")) return;
 
         await fetch(
-          `${SUPABASE_URL}/rest/v1/orders?table_number=eq.${tableNumber}`,
+          `${SUPABASE_URL}/rest/v1/orders?table_number=eq.${tableNumber}&seat_type=eq.${seatType}`,
           {
             method: "PATCH",
             headers: {

@@ -11,16 +11,85 @@
   <style>
     body {
       font-family: sans-serif;
-      padding: 20px;
+      background: #111;
+      color: #fff;
+      margin: 0;
+      padding: 16px;
     }
 
-    button {
-      padding: 10px 20px;
+    /* タイトル */
+    h2 {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    /* カード */
+    .card {
+      background: #222;
+      border-radius: 16px;
+      padding: 16px;
+      margin-bottom: 20px;
+    }
+
+    /* 席タイプ */
+    .seat-type {
+      display: flex;
+      gap: 10px;
+    }
+
+    .seat-type label {
+      flex: 1;
+      text-align: center;
+      padding: 16px;
+      background: #333;
+      border-radius: 10px;
+      cursor: pointer;
       font-size: 18px;
     }
 
+    input[type="radio"] {
+      display: none;
+    }
+
+    input[type="radio"]:checked+span {
+      background: #ff4d4d;
+      padding: 16px;
+      border-radius: 10px;
+      display: block;
+    }
+
+    /* セレクト */
+    #table {
+      width: 100%;
+      padding: 16px;
+      font-size: 20px;
+      margin-top: 15px;
+      border-radius: 10px;
+    }
+
+    /* ボタン */
+    button {
+      width: 100%;
+      padding: 18px;
+      font-size: 22px;
+      border: none;
+      border-radius: 12px;
+      background: #ff4d4d;
+      color: #fff;
+      margin-top: 15px;
+    }
+
+    /* URL */
+    #url {
+      margin-top: 10px;
+      font-size: 14px;
+      word-break: break-all;
+    }
+
+    /* QR */
     #qr {
       margin-top: 20px;
+      text-align: center;
     }
   </style>
 </head>
@@ -29,27 +98,41 @@
 
   <h2>セッション発行（開発用）</h2>
 
-  <!-- テーブル選択 -->
-  <select id="table">
-    <option value="1">テーブル1</option>
-    <option value="2">テーブル2</option>
-    <option value="3">テーブル3</option>
-    <option value="4">テーブル4</option>
-    <option value="5">テーブル5</option>
-    <option value="6">カウンター1</option>
-    <option value="7">カウンター2</option>
-    <option value="8">カウンター3</option>
-    <option value="9">カウンター4</option>
-    <option value="10">カウンター5</option>
-  </select>
+  <div class="card">
 
-  <button onclick="createSession()">発行</button>
+    <div class="seat-type">
+      <label>
+        <input type="radio" name="seatType" value="table" checked>
+        <span>テーブル</span>
+      </label>
 
-  <hr>
+      <label>
+        <input type="radio" name="seatType" value="counter">
+        <span>カウンター</span>
+      </label>
+    </div>
 
-  <!-- 結果表示 -->
-  <p id="url"></p>
-  <div id="qr"></div>
+    <select id="table">
+      <option value="1">番号 1</option>
+      <option value="2">番号 2</option>
+      <option value="3">番号 3</option>
+      <option value="4">番号 4</option>
+      <option value="5">番号 5</option>
+      <option value="6">番号 6</option>
+      <option value="7">番号 7</option>
+      <option value="8">番号 8</option>
+      <option value="9">番号 9</option>
+      <option value="10">番号 10</option>
+    </select>
+
+    <button onclick="createSession()">QR発行</button>
+
+  </div>
+
+  <div class="card">
+    <p id="url"></p>
+    <div id="qr"></div>
+  </div>
 
   <script>
 
@@ -64,9 +147,29 @@
     // ===============================
     async function createSession() {
 
+      // 席タイプ取得
+      const seatType = document.querySelector('input[name="seatType"]:checked').value;
+
+      // テーブル番号
       const tableNumber = document.getElementById("table").value;
 
       try {
+
+        // まずテーブル構造を確認（デバッグ用）
+        console.log("Checking table structure...");
+        const checkRes = await fetch(`${SUPABASE_URL}/rest/v1/sessions?limit=1`, {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            "apikey": SUPABASE_API_KEY,
+            "Authorization": `Bearer ${SUPABASE_API_KEY}`
+          }
+        });
+
+        if (checkRes.ok) {
+          const sampleData = await checkRes.json();
+          console.log("Table structure check:", sampleData);
+        }
 
         // ① セッション作成
         const res = await fetch(`${SUPABASE_URL}/rest/v1/sessions`, {
@@ -78,14 +181,22 @@
             "Prefer": "return=representation"
           },
           body: JSON.stringify({
-            table_number: tableNumber
+            table_number: tableNumber,
+            seat_type: seatType
           })
         });
 
+        if (!res.ok) {
+          const error = await res.json();
+          alert("セッション作成失敗: " + (error.message || res.statusText));
+          console.error(error);
+          return;
+        }
+
         const data = await res.json();
 
-        if (!data[0]) {
-          alert("セッション作成失敗");
+        if (!Array.isArray(data) || !data[0]) {
+          alert("セッション作成失敗: レスポンス形式エラー");
           console.error(data);
           return;
         }
@@ -93,18 +204,21 @@
         const sessionId = data[0].id;
 
         // ===============================
-        // ② URL生成（ここ重要）
+        // ② URL生成（修正）
         // ===============================
         const baseUrl = location.origin + "/index.html";
 
         const orderUrl =
-          `${baseUrl}?table=${tableNumber}&session=${sessionId}`;
+          `${baseUrl}?table=${tableNumber}&session=${sessionId}&seat_type=${seatType}`;
 
-        // 表示
-        document.getElementById("url").textContent = orderUrl;
+        const label = seatType === "counter"
+          ? "カウンター"
+          : "テーブル";
+        document.getElementById("url").textContent =
+          `${label}${tableNumber} → ${orderUrl}`;
 
         // ===============================
-        // ③ QR生成
+        // ③ QR生成（そのままでOK）
         // ===============================
         document.getElementById("qr").innerHTML = "";
 
@@ -115,6 +229,7 @@
           }
           document.getElementById("qr").appendChild(canvas);
         });
+
 
       } catch (e) {
         alert("通信エラー");
