@@ -110,6 +110,11 @@
         <input type="radio" name="seatType" value="counter">
         <span>カウンター</span>
       </label>
+
+      <label>
+        <input type="radio" name="seatType" value="takeout">
+        <span>テイクアウト</span>
+      </label>
     </div>
 
     <select id="table">
@@ -151,7 +156,12 @@
       const seatType = document.querySelector('input[name="seatType"]:checked').value;
 
       // テーブル番号
-      const tableNumber = document.getElementById("table").value;
+      let tableNumber = document.getElementById("table").value;
+
+      // テイクアウトなら番号不要
+      if (seatType === "takeout") {
+        tableNumber = 0;
+      }
 
       try {
 
@@ -213,7 +223,9 @@
 
         const label = seatType === "counter"
           ? "カウンター"
-          : "テーブル";
+          : seatType === "takeout"
+            ? "テイクアウト"
+            : "テーブル";
         document.getElementById("url").textContent =
           `${label}${tableNumber} → ${orderUrl}`;
 
@@ -236,6 +248,22 @@
         console.error(e);
       }
     }
+
+    // ===============================
+    // 席タイプ変更時のUI制御（追加）
+    // ===============================
+    document.querySelectorAll('input[name="seatType"]').forEach(radio => {
+      radio.addEventListener("change", () => {
+        const type = document.querySelector('input[name="seatType"]:checked').value;
+        const tableSelect = document.getElementById("table");
+
+        if (type === "takeout") {
+          tableSelect.style.display = "none";
+        } else {
+          tableSelect.style.display = "block";
+        }
+      });
+    });
 
   </script>
 

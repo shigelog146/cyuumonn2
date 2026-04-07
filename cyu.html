@@ -195,9 +195,15 @@
 
         const [seatType, table] = key.split("_");
 
-        const label = seatType === "counter"
-          ? "カウンター"
-          : "テーブル";
+        let label;
+
+        if (seatType === "takeout") {
+          label = "テイクアウト";
+        } else if (seatType === "counter") {
+          label = "カウンター";
+        } else {
+          label = "テーブル";
+        }
 
         const tableDiv = document.createElement("div");
         tableDiv.className = "table-group";
@@ -277,7 +283,12 @@
         });
 
         tableDiv.innerHTML = `
-      <h2>${label} ${table}</h2>
+      <h2>
+  ${seatType === "takeout"
+            ? `${label}`
+            : `${label} ${table}`
+          }
+</h2>
       ${content}
       <div style="margin-top:10px; font-weight:bold;">
         合計：¥${total}
@@ -285,7 +296,7 @@
 
 <button onclick="checkoutTable('${seatType}', ${table})"
   style="margin-top:10px; padding:10px;">
-  💰 この${label}を会計
+  💰 ${seatType === "takeout" ? "テイクアウト会計" : `この${label}を会計`}
 </button>
       `;
         container.appendChild(tableDiv);
@@ -316,7 +327,15 @@
           return;
         }
 
-        const label = seatType === "counter" ? "カウンター" : "テーブル";
+        let label;
+
+        if (seatType === "takeout") {
+          label = "テイクアウト";
+        } else if (seatType === "counter") {
+          label = "カウンター";
+        } else {
+          label = "テーブル";
+        }
 
         let text = `【${label} ${tableNumber} 会計】\n\n`;
         let total = 0;
