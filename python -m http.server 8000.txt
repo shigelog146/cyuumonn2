@@ -1,0 +1,14 @@
+python -m http.server 8000
+
+http://localhost:8000/index.html?table=1
+
+http://localhost:8000/index.html?table=2
+
+http://localhost:8000/index.html?table=3
+
+http://localhost:8000/cyu.html
+
+http://localhost:8000/session.html
+
+Ctrl + Shift + R
+
