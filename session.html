@@ -216,7 +216,7 @@
         // ===============================
         // ② URL生成（修正）
         // ===============================
-        const baseUrl = location.origin + "/index.html";
+        const baseUrl = location.origin + location.pathname.replace(/[^/]+$/, "") + "index.html";
 
         const orderUrl =
           `${baseUrl}?table=${tableNumber}&session=${sessionId}&seat_type=${seatType}`;
