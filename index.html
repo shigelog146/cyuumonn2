@@ -225,7 +225,8 @@
         table_number: form.table.value,
         seat_type: seatTypeParam,   // ←★これを追加
         message: form.message.value.trim(),
-        session_id: currentSessionId // ←追加
+        session_id: currentSessionId, // ←追加
+        session_group_id: currentSessionId // ←追加
       };
 
       // 選択されたメニュー収集
@@ -363,10 +364,22 @@
       // ===============================
       // ★ ここに追加（最重要）
       // ===============================
-      if (!sessionParam) {
-        alert("QRを読み直してください");
-        return;
+      // ===============================
+      // session_group_id確定ロジック
+      // ===============================
+      let sessionGroupId;
+
+      // QRにsessionがある場合 → それを使う
+      if (sessionParam) {
+        sessionGroupId = sessionParam;
       }
+      // 無い場合 → 自動生成
+      else {
+        sessionGroupId = crypto.randomUUID();
+      }
+
+      // グローバルにセット
+      currentSessionId = sessionGroupId;
       // ★これを追加
       if (sessionParam) {
         currentSessionId = sessionParam;
@@ -422,7 +435,7 @@
         // ===============================
         // ★ URL確認ログ
         // ===============================
-        const url = `${SUPABASE_URL}/rest/v1/orders?session_id=eq.${currentSessionId}&is_hidden=eq.false&is_cancelled=eq.false&select=*,order_items(*)&order=created_at.desc`;
+        const url = `${SUPABASE_URL}/rest/v1/orders?session_group_id=eq.${currentSessionId}&is_hidden=eq.false&is_cancelled=eq.false&select=*,order_items(*)&order=created_at.desc`;
 
         console.log("fetch URL:", url);
 

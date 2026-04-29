@@ -13,6 +13,12 @@
 
   <h1>厨房オーダー</h1>
 
+  <div style="text-align:center; margin-bottom:10px;">
+    <button onclick="toggleHistory()" id="historyBtn">
+      📜 会計済みを表示
+    </button>
+  </div>
+
   <!-- 音有効化 -->
   <div id="soundUnlock" style="text-align:center;margin-bottom:12px;">
     <button id="unlockSoundBtn" type="button">🔊 音を有効にする</button>
@@ -34,7 +40,7 @@
     // セッション
     // ===============================
     let currentSessionId = null;
-
+    let showHistory = false; // ← 追加（false=現在注文 / true=会計済み）
     // ===============================
     // 状態管理
     // ===============================
@@ -56,6 +62,27 @@
       playChirin();
       soundUnlocked = true;
       document.getElementById('soundUnlock').style.display = 'none';
+    }
+
+    // ===============================
+    // 表示切替
+    // ===============================
+    function toggleHistory() {
+
+      showHistory = !showHistory;
+
+      const btn = document.getElementById("historyBtn");
+
+      if (showHistory) {
+        btn.textContent = "📦 現在の注文に戻る";
+      } else {
+        btn.textContent = "📜 会計済みを表示";
+      }
+
+      // 状態リセット（重要：過去注文で音が鳴らないように）
+      displayedOrderIds.clear();
+
+      fetchOrders();
     }
 
     // ===============================
@@ -128,7 +155,7 @@
       try {
 
         const res = await fetch(
-          `${SUPABASE_URL}/rest/v1/orders?is_hidden=eq.false&select=*,order_items(*)&order=created_at.desc`,
+          `${SUPABASE_URL}/rest/v1/orders?is_hidden=eq.${showHistory}&select=*,order_items(*)&order=created_at.desc`,
           {
             headers: {
               "apikey": API_KEY,
@@ -150,7 +177,7 @@
           if (!displayedOrderIds.has(o.id)) hasNew = true;
         }
 
-        if (displayedOrderIds.size > 0 && hasNew) {
+        if (!showHistory && displayedOrderIds.size > 0 && hasNew) {
           playChirinMulti();
         }
 
@@ -179,7 +206,7 @@
       orders.forEach(o => {
 
         // ▼キーを変更（ここが最重要）
-        const key = `${o.seat_type || "table"}_${o.table_number}`;
+        const key = `${o.session_group_id}`;
 
         if (!tableMap[key]) {
           tableMap[key] = [];
@@ -193,7 +220,13 @@
       // ===============================
       for (const key in tableMap) {
 
-        const [seatType, table] = key.split("_");
+        // 一番古い注文を取得（これが開始時間）
+        const oldest = tableMap[key].reduce((a, b) => {
+          return new Date(a.created_at) < new Date(b.created_at) ? a : b;
+        });
+        const first = tableMap[key][0];
+        const seatType = first.seat_type || "table";
+        const table = first.table_number;
 
         let label;
 
@@ -204,7 +237,17 @@
         } else {
           label = "テーブル";
         }
+        const startTime = new Date(oldest.created_at);
 
+        // 表示フォーマット
+        const formattedStart = startTime.toLocaleTimeString("ja-JP", {
+          hour: "2-digit",
+          minute: "2-digit"
+        });
+
+        // 経過時間（分）
+        const now = new Date();
+        const elapsedMin = Math.floor((now - startTime) / 60000);
         const tableDiv = document.createElement("div");
         tableDiv.className = "table-group";
 
@@ -268,36 +311,52 @@
 
           // ボタン
           content += `
-    <div style="margin-top:5px;">
-      <button class="doneBtn" onclick="toggleDone(${o.id}, ${o.is_done})">
-        ${o.is_done ? "未完了に戻す" : "調理完了"}
-      </button>
+<div style="margin-top:5px;">
 
-      <button class="cancelBtn" onclick="toggleCancel(${o.id}, ${o.is_cancelled})">
-        ${o.is_cancelled ? "取消解除" : "注文取消"}
-      </button>
-    </div>
+  ${!showHistory ? `
+  <button class="doneBtn" onclick="toggleDone(${o.id}, ${o.is_done})">
+    ${o.is_done ? "未完了に戻す" : "調理完了"}
+  </button>
+
+  <button class="cancelBtn" onclick="toggleCancel(${o.id}, ${o.is_cancelled})">
+    ${o.is_cancelled ? "取消解除" : "注文取消"}
+  </button>
+  ` : ""}
+
+  ${showHistory ? `
+  <button onclick="restoreOrder(${o.id})"
+    style="background:#ff9800; color:white;">
+    🔄 復元
+  </button>
+  ` : ""}
+
+</div>
   `;
 
           content += `</div>`;
         });
 
         tableDiv.innerHTML = `
-      <h2>
+<h2>
   ${seatType === "takeout"
             ? `${label}`
             : `${label} ${table}`
           }
+  <span style="font-size:0.7em; color:#ccc;">
+    🕒 ${formattedStart}（${elapsedMin}分経過）
+  </span>
 </h2>
       ${content}
       <div style="margin-top:10px; font-weight:bold;">
         合計：¥${total}
       </div>
 
-<button onclick="checkoutTable('${seatType}', ${table})"
+${!showHistory ? `
+<button onclick="checkoutTable('${key}', '${seatType}', ${table})"
   style="margin-top:10px; padding:10px;">
   💰 ${seatType === "takeout" ? "テイクアウト会計" : `この${label}を会計`}
 </button>
+` : ""}
       `;
         container.appendChild(tableDiv);
       }
@@ -306,12 +365,12 @@
     // ===============================
     // テーブル単位会計
     // ===============================
-    async function checkoutTable(seatType, tableNumber) {
+    async function checkoutTable(groupId, seatType, tableNumber) {
 
       try {
 
         const res = await fetch(
-          `${SUPABASE_URL}/rest/v1/orders?table_number=eq.${tableNumber}&seat_type=eq.${seatType}&is_hidden=eq.false&select=*,order_items(*)`,
+          `${SUPABASE_URL}/rest/v1/orders?session_group_id=eq.${groupId}&is_hidden=eq.false&select=*,order_items(*)`,
           {
             headers: {
               "apikey": API_KEY,
@@ -374,7 +433,7 @@
         if (!confirm(text + "\n会計しますか？")) return;
 
         await fetch(
-          `${SUPABASE_URL}/rest/v1/orders?table_number=eq.${tableNumber}&seat_type=eq.${seatType}`,
+          `${SUPABASE_URL}/rest/v1/orders?session_group_id=eq.${groupId}`,
           {
             method: "PATCH",
             headers: {
@@ -505,6 +564,30 @@
       fetchOrders();
     }
 
+    // ===============================
+    // 復元（会計済み → 未会計）
+    // ===============================
+    async function restoreOrder(id) {
+
+      if (!confirm("この注文を復元しますか？（会計前に戻ります）")) return;
+
+      await fetch(`${SUPABASE_URL}/rest/v1/${TABLE}?id=eq.${id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": API_KEY,
+          "Authorization": `Bearer ${API_KEY}`
+        },
+        body: JSON.stringify({
+          is_hidden: false // ← ここが本質
+        })
+      });
+
+      // 🔴重要：復元は「新規注文ではない」ので音を鳴らさない
+      displayedOrderIds.add(id);
+
+      fetchOrders();
+    }
 
     // ===============================
     // 初期化（最重要）
