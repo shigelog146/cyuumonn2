@@ -308,7 +308,7 @@
 
           document.getElementById('thanksMessage').style.display = 'block';
 
-          fetchOrderHistory(orderData.table_number);
+          fetchOrderHistory();
 
         } else {
 
@@ -322,7 +322,12 @@
         console.error(error);
       }
     });
-
+    if (!orderRes.ok) {
+      const err = await orderRes.text();
+      console.error("INSERT失敗:", err);
+      alert(err);
+      return;
+    }
     // ===============================
     // メニュー検索
     // ===============================
@@ -353,6 +358,29 @@
       const sessionParam = params.get('session');
       seatTypeParam = params.get('seat_type') || 'table';
       // ===============================
+      // セッション確定（テスト対応版）
+      // ===============================
+      const mode = params.get("mode");
+
+      if (mode === "test") {
+
+        console.log("テストモード");
+
+        // sessionがあれば使う、なければ仮作成
+        currentSessionId =
+          sessionParam || ("test-" + Date.now());
+
+      } else {
+
+        // 本番はsession必須
+        if (!sessionParam) {
+          alert("QRを読み直してください");
+          return;
+        }
+
+        currentSessionId = sessionParam;
+      }
+      // ===============================
       // ★ここに追加（表示処理）
       // ===============================
       const label = seatTypeParam === "counter"
@@ -367,23 +395,6 @@
       // ===============================
       // session_group_id確定ロジック
       // ===============================
-      let sessionGroupId;
-
-      // QRにsessionがある場合 → それを使う
-      if (sessionParam) {
-        sessionGroupId = sessionParam;
-      }
-      // 無い場合 → 自動生成
-      else {
-        sessionGroupId = crypto.randomUUID();
-      }
-
-      // グローバルにセット
-      currentSessionId = sessionGroupId;
-      // ★これを追加
-      if (sessionParam) {
-        currentSessionId = sessionParam;
-      }
       //console.log("session:", currentSessionId);
       if (tableParam) {
 
