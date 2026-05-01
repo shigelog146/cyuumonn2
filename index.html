@@ -322,12 +322,7 @@
         console.error(error);
       }
     });
-    if (!orderRes.ok) {
-      const err = await orderRes.text();
-      console.error("INSERT失敗:", err);
-      alert(err);
-      return;
-    }
+
     // ===============================
     // メニュー検索
     // ===============================
